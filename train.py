@@ -10,6 +10,7 @@ from datetime import datetime
 from tqdm import tqdm
 from torch.nn import DataParallel
 from tokenizations.bpe_tokenizer import get_encoder
+from transformers import GPT2Config, GPT2LMHeadModel, get_linear_schedule_with_warmup
 
 
 def build_files(data_path, tokenized_data_path, num_pieces, full_tokenizer, min_length):
@@ -78,7 +79,7 @@ def main():
 
     os.environ["CUDA_VISIBLE_DEVICES"] = args.device  # 此处设置程序使用哪些显卡
 
-    model_config = transformers.modeling_gpt2.GPT2Config.from_json_file(args.model_config)
+    model_config = GPT2Config.from_json_file(args.model_config)
     print('config:\n' + model_config.to_json_string())
 
     n_ctx = model_config.n_ctx
@@ -119,9 +120,9 @@ def main():
         print('files built')
 
     if not args.pretrained_model:
-        model = transformers.modeling_gpt2.GPT2LMHeadModel(config=model_config)
+        model = GPT2LMHeadModel(config=model_config)
     else:
-        model = transformers.modeling_gpt2.GPT2LMHeadModel.from_pretrained(args.pretrained_model)
+        model = GPT2LMHeadModel.from_pretrained(args.pretrained_model)
     model.train()
     model.to(device)
 
@@ -140,9 +141,9 @@ def main():
     total_steps = int(full_len / stride * epochs / batch_size / gradient_accumulation)
     print('total steps = {}'.format(total_steps))
 
-    optimizer = transformers.AdamW(model.parameters(), lr=lr, correct_bias=True)
-    scheduler = transformers.WarmupLinearSchedule(optimizer, warmup_steps=warmup_steps,
-                                                          t_total=total_steps)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps,
+                                                          num_training_steps=total_steps)
     if fp16:
         try:
             from apex import amp
